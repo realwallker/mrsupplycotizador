@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mr Supply — Cotizador</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --ink:#14181C;
+    --bone:#F6F1E7;
+    --bone-2:#EFE8D8;
+    --brass:#B08D57;
+    --brass-light:#D9BD8C;
+    --sage:#6B7C63;
+    --sage-bg:#E7ECE4;
+    --clay:#C1793A;
+    --clay-bg:#F3E4D2;
+    --graphite:#565D63;
+    --line:rgba(20,24,28,0.14);
+    --white:#FFFFFF;
+    --danger:#B14A4A;
+    --font-display:'Fraunces', serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bone);
+    color:var(--ink);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{max-width:1320px;margin:0 auto;padding:28px 24px 80px;}
+
+  /* Topbar */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{
+    width:44px;height:44px;border-radius:50%;
+    background:radial-gradient(circle at 32% 28%, var(--brass-light), var(--brass) 60%, #8f6e3d 100%);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-display);font-weight:600;color:var(--ink);font-size:16px;
+    box-shadow:0 1px 0 rgba(255,255,255,0.4) inset, 0 2px 6px rgba(20,24,28,0.25);
+    flex-shrink:0;
+  }
+  .brand-text h1{font-family:var(--font-display);font-weight:600;font-size:22px;margin:0;letter-spacing:0.2px;}
+  .brand-text p{margin:2px 0 0;font-size:12px;color:var(--graphite);letter-spacing:0.5px;text-transform:uppercase;}
+
+  .tabs{display:flex;gap:6px;background:var(--bone-2);padding:5px;border-radius:999px;width:fit-content;}
+  .tab-btn{
+    border:none;background:transparent;padding:9px 18px;border-radius:999px;font-family:var(--font-body);
+    font-weight:600;font-size:13.5px;color:var(--graphite);cursor:pointer;transition:all .15s ease;
+  }
+  .tab-btn.active{background:var(--ink);color:var(--bone);}
+  .tab-btn:not(.active):hover{color:var(--ink);}
+
+  main{display:none;}
+  main.active{display:block;}
+
+  /* Buttons */
+  .btn{
+    font-family:var(--font-body);font-weight:600;font-size:13.5px;border-radius:9px;padding:10px 16px;
+    border:1px solid var(--line);background:var(--white);color:var(--ink);cursor:pointer;transition:all .15s ease;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .btn:hover{border-color:var(--ink);}
+  .btn-primary{background:var(--ink);color:var(--bone);border-color:var(--ink);}
+  .btn-primary:hover{background:#2a3138;}
+  .btn-brass{background:var(--brass);color:var(--ink);border-color:var(--brass);}
+  .btn-brass:hover{background:var(--brass-light);}
+  .btn-ghost{background:transparent;border-color:transparent;color:var(--graphite);padding:6px 10px;}
+  .btn-ghost:hover{color:var(--danger);}
+  .btn-sm{padding:6px 11px;font-size:12.5px;border-radius:7px;}
+  .btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+  /* Catalog toolbar */
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px;}
+  .search-input, select, input[type=text], input[type=number], input[type=date], textarea{
+    font-family:var(--font-body);font-size:13.5px;padding:10px 12px;border-radius:9px;border:1px solid var(--line);
+    background:var(--white);color:var(--ink);outline:none;
+  }
+  .search-input:focus, select:focus, input:focus, textarea:focus{border-color:var(--brass);}
+  .search-input{min-width:220px;flex:1;}
+  .spacer{flex:1;}
+
+  /* Product grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;}
+  .pcard{
+    background:var(--white);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+    display:flex;flex-direction:column;transition:box-shadow .15s ease, transform .15s ease;
+  }
+  .pcard:hover{box-shadow:0 8px 22px rgba(20,24,28,0.08);transform:translateY(-1px);}
+  .pcard-img{width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--bone-2);border-bottom:1px solid var(--line);}
+  .pcard-body{padding:12px 13px 13px;display:flex;flex-direction:column;gap:6px;flex:1;}
+  .pcard-cat{font-size:10.5px;text-transform:uppercase;letter-spacing:0.6px;color:var(--brass);font-weight:700;}
+  .pcard-name{font-family:var(--font-display);font-weight:600;font-size:15.5px;line-height:1.25;}
+  .pcard-unit{font-size:12px;color:var(--graphite);}
+  .pcard-foot{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:6px;}
+  .price{font-family:var(--font-mono);font-weight:600;font-size:14.5px;}
+  .badge{font-size:10.5px;font-weight:700;letter-spacing:0.3px;padding:4px 8px;border-radius:999px;text-transform:uppercase;}
+  .badge-stock{background:var(--sage-bg);color:var(--sage);}
+  .badge-order{background:var(--clay-bg);color:var(--clay);}
+  .pcard-actions{display:flex;gap:6px;padding:0 13px 13px;}
+
+  .empty{padding:60px 20px;text-align:center;color:var(--graphite);}
+  .empty h3{font-family:var(--font-display);font-size:19px;color:var(--ink);margin-bottom:6px;}
+
+  /* Modal */
+  .overlay{position:fixed;inset:0;background:rgba(20,24,28,0.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;}
+  .modal{background:var(--white);border-radius:16px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;padding:26px;}
+  .modal h2{font-family:var(--font-display);margin:0 0 16px;font-size:20px;}
+  .field{margin-bottom:13px;display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:12px;font-weight:600;color:var(--graphite);}
+  .field input, .field select, .field textarea{width:100%;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+
+  /* Quote builder layout */
+  .quote-layout{display:grid;grid-template-columns:380px 1fr;gap:22px;align-items:start;}
+  @media (max-width:900px){.quote-layout{grid-template-columns:1fr;}}
+  .picker-panel{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:16px;position:sticky;top:20px;}
+  .picker-list{max-height:520px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-top:10px;}
+  .picker-row{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:10px;}
+  .picker-row img{width:40px;height:40px;border-radius:8px;object-fit:cover;background:var(--bone-2);flex-shrink:0;}
+  .picker-row .pr-name{font-size:13px;font-weight:600;flex:1;}
+  .picker-row .pr-price{font-family:var(--font-mono);font-size:12.5px;color:var(--graphite);}
+
+  .client-fields{display:flex;flex-direction:column;gap:9px;margin-bottom:14px;}
+
+  /* Document / signature element */
+  .doc-wrap{background:var(--white);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .doc-perf{
+    height:16px;background:var(--ink);
+    -webkit-mask-image:radial-gradient(circle 6px at 12px 0, transparent 6px, black 6.5px);
+    mask-image:radial-gradient(circle 6px at 12px 0, transparent 6px, black 6.5px);
+    -webkit-mask-repeat:repeat-x; mask-repeat:repeat-x;
+    -webkit-mask-size:24px 16px; mask-size:24px 16px;
+  }
+  .doc-head{background:var(--ink);color:var(--bone);padding:24px 28px 20px;display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;}
+  .doc-head .seal{
+    width:58px;height:58px;border-radius:50%;flex-shrink:0;
+    background:radial-gradient(circle at 32% 28%, var(--brass-light), var(--brass) 65%, #8f6e3d 100%);
+    display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;color:var(--ink);
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);
+  }
+  .doc-head-left{display:flex;gap:14px;align-items:center;}
+  .doc-head h2{font-family:var(--font-display);font-size:22px;margin:0;font-weight:600;}
+  .doc-head p{margin:2px 0 0;font-size:12px;color:var(--brass-light);letter-spacing:0.4px;}
+  .doc-meta{text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--brass-light);line-height:1.7;}
+  .doc-meta b{color:var(--bone);font-size:13px;}
+
+  .doc-body{padding:26px 28px;}
+  .doc-client{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:20px;padding-bottom:18px;border-bottom:1px dashed var(--line);}
+  .doc-client-block h4{font-size:10.5px;text-transform:uppercase;letter-spacing:0.6px;color:var(--brass);margin:0 0 6px;}
+  .doc-client-block div{font-size:13.5px;line-height:1.6;}
+
+  table.doc-table{width:100%;border-collapse:collapse;margin-bottom:18px;}
+  table.doc-table th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:0.5px;color:var(--graphite);
+    padding:0 6px 8px;border-bottom:1px solid var(--ink);font-weight:700;
+  }
+  table.doc-table td{padding:10px 6px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:middle;}
+  table.doc-table td.num, table.doc-table th.num{text-align:right;font-family:var(--font-mono);}
+  .item-name-cell{display:flex;align-items:center;gap:10px;}
+  .item-name-cell img{width:36px;height:36px;border-radius:7px;object-fit:cover;background:var(--bone-2);flex-shrink:0;}
+  .item-name-cell .it-meta{font-size:11px;color:var(--graphite);margin-top:2px;}
+
+  .doc-totals{display:flex;justify-content:flex-end;}
+  .totals-box{width:260px;font-size:13.5px;}
+  .totals-box .trow{display:flex;justify-content:space-between;padding:6px 0;}
+  .totals-box .trow.grand{border-top:2px solid var(--ink);margin-top:6px;padding-top:10px;font-family:var(--font-display);font-size:19px;font-weight:600;}
+  .totals-box .trow span:last-child{font-family:var(--font-mono);}
+
+  .doc-notes{margin-top:20px;font-size:12.5px;color:var(--graphite);line-height:1.7;border-top:1px dashed var(--line);padding-top:16px;}
+  .doc-notes b{color:var(--ink);}
+
+  .doc-foot{background:var(--bone-2);padding:16px 28px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:11.5px;color:var(--graphite);}
+
+  .doc-actions{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+
+  .qty-stepper{display:flex;align-items:center;gap:6px;}
+  .qty-stepper button{width:24px;height:24px;border-radius:6px;border:1px solid var(--line);background:var(--white);cursor:pointer;font-weight:700;}
+  .qty-stepper span{width:26px;text-align:center;font-family:var(--font-mono);font-size:13px;}
+
+  /* History */
+  .hist-row{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--white);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;flex-wrap:wrap;}
+  .hist-row .hnum{font-family:var(--font-mono);font-weight:600;background:var(--bone-2);padding:5px 10px;border-radius:7px;font-size:12.5px;}
+  .hist-row .hclient{font-weight:600;flex:1;min-width:140px;}
+  .hist-row .htotal{font-family:var(--font-mono);font-weight:600;}
+  .hist-row .hdate{font-size:12px;color:var(--graphite);}
+
+  .hint{font-size:11.5px;color:var(--graphite);margin-top:4px;}
+
+  @media print{
+    body{background:white;}
+    #app{max-width:none;padding:0;}
+    .topbar,.tabs,.toolbar,.picker-panel,.doc-actions,.no-print{display:none !important;}
+    .quote-layout{grid-template-columns:1fr;}
+    .doc-wrap{border:none;border-radius:0;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">MS</div>
+      <div class="brand-text">
+        <h1>Mr Supply</h1>
+        <p>Cotizador inteligente</p>
+      </div>
+    </div>
+    <div class="tabs" id="tabs">
+      <button class="tab-btn active" data-tab="catalog">Catálogo</button>
+      <button class="tab-btn" data-tab="quote">Nueva cotización</button>
+      <button class="tab-btn" data-tab="history">Historial</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span id="storageBadge" class="badge" style="text-transform:none;letter-spacing:0;"></span>
+      <button class="btn btn-sm" id="btnBackupExport" title="Descarga un respaldo completo (catálogo + cotizaciones)">Respaldo ⬇</button>
+      <label class="btn btn-sm" style="cursor:pointer;" title="Restaura desde un archivo de respaldo">
+        Restaurar ⬆
+        <input type="file" id="backupFile" accept=".json" style="display:none;">
+      </label>
+    </div>
+  </div>
+
+  <!-- CATALOG -->
+  <main id="view-catalog" class="active">
+    <div class="toolbar">
+      <input type="text" class="search-input" id="catSearch" placeholder="Buscar producto...">
+      <select id="catFilterCat"><option value="">Todas las categorías</option></select>
+      <select id="catFilterStock">
+        <option value="">Stock: todos</option>
+        <option value="stock">En stock</option>
+        <option value="pedido">Bajo pedido</option>
+      </select>
+      <div class="spacer"></div>
+      <button class="btn btn-sm" id="btnExportExcel">Exportar Excel</button>
+      <label class="btn btn-sm" style="cursor:pointer;">
+        Importar Excel
+        <input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="display:none;">
+      </label>
+      <button class="btn btn-primary btn-sm" id="btnAddProduct">+ Producto</button>
+    </div>
+    <div class="hint" id="catHint" style="display:none;"></div>
+    <div class="grid" id="catalogGrid"></div>
+  </main>
+
+  <!-- QUOTE -->
+  <main id="view-quote">
+    <div class="quote-layout">
+      <div class="picker-panel">
+        <div class="client-fields">
+          <div class="field"><label>Cliente</label><input type="text" id="qClientName" placeholder="Nombre del cliente"></div>
+          <div class="row2">
+            <div class="field"><label>Teléfono</label><input type="text" id="qClientPhone" placeholder="09xxxxxxxx"></div>
+            <div class="field"><label>Ciudad</label><input type="text" id="qClientCity" placeholder="Guayaquil"></div>
+          </div>
+        </div>
+        <input type="text" class="search-input" id="pickerSearch" placeholder="Buscar producto para agregar...">
+        <div class="picker-list" id="pickerList"></div>
+      </div>
+
+      <div>
+        <div class="doc-actions">
+          <div>
+            <button class="btn btn-sm" id="btnNewQuote">Nueva / Limpiar</button>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm" id="btnSaveQuote">Guardar en historial</button>
+            <button class="btn btn-brass btn-sm" id="btnPrintQuote">Imprimir / PDF</button>
+          </div>
+        </div>
+
+        <div class="doc-wrap" id="docWrap">
+          <div class="doc-perf"></div>
+          <div class="doc-head">
+            <div class="doc-head-left">
+              <div class="seal">MS</div>
+              <div>
+                <h2>Mr Supply</h2>
+                <p>Suplementación a pedido · Ecuador</p>
+              </div>
+            </div>
+            <div class="doc-meta">
+              N° <b id="docNumber">MS-0001</b><br>
+              Fecha: <span id="docDate"></span><br>
+              Válida hasta: <span id="docValid"></span>
+            </div>
+          </div>
+
+          <div class="doc-body">
+            <div class="doc-client">
+              <div class="doc-client-block">
+                <h4>Cotizado para</h4>
+                <div id="docClientName">—</div>
+                <div id="docClientMeta" style="color:var(--graphite);font-size:12.5px;"></div>
+              </div>
+              <div class="doc-client-block">
+                <h4>Entrega</h4>
+                <div style="color:var(--graphite);font-size:12.5px;max-width:220px;">Productos en stock se despachan en 24–48h. Productos bajo pedido según tiempo indicado por línea.</div>
+              </div>
+            </div>
+
+            <table class="doc-table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th class="num">Cant.</th>
+                  <th class="num">P. Unit.</th>
+                  <th class="num">Subtotal</th>
+                  <th class="no-print"></th>
+                </tr>
+              </thead>
+              <tbody id="docItems"></tbody>
+            </table>
+
+            <div class="doc-totals">
+              <div class="totals-box">
+                <div class="field" style="flex-direction:row;align-items:center;justify-content:space-between;gap:8px;">
+                  <label style="margin:0;">Descuento %</label>
+                  <input type="number" id="qDiscount" min="0" max="100" value="0" style="width:70px;">
+                </div>
+                <div class="trow"><span>Subtotal</span><span id="tSubtotal">$0.00</span></div>
+                <div class="trow"><span>Descuento</span><span id="tDiscount">-$0.00</span></div>
+                <div class="trow grand"><span>Total</span><span id="tTotal">$0.00</span></div>
+              </div>
+            </div>
+
+            <div class="doc-notes">
+              <b>Notas:</b>
+              <textarea id="qNotes" rows="2" style="width:100%;margin-top:6px;" placeholder="Condiciones de pago, envío, etc."></textarea>
+            </div>
+          </div>
+
+          <div class="doc-foot">
+            <span>Mr Supply · pedidos a nivel nacional</span>
+            <span>Cotización generada digitalmente</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- HISTORY -->
+  <main id="view-history">
+    <div class="toolbar">
+      <input type="text" class="search-input" id="histSearch" placeholder="Buscar por cliente o número...">
+    </div>
+    <div id="historyList"></div>
+  </main>
+
+</div>
+
+<!-- Product modal -->
+<div class="overlay" id="productOverlay" style="display:none;">
+  <div class="modal">
+    <h2 id="modalTitle">Nuevo producto</h2>
+    <input type="hidden" id="pId">
+    <div class="field"><label>Nombre</label><input type="text" id="pName" placeholder="Whey Protein Gold Standard"></div>
+    <div class="row2">
+      <div class="field"><label>Categoría</label><input type="text" id="pCategory" placeholder="Proteínas"></div>
+      <div class="field"><label>Presentación</label><input type="text" id="pUnit" placeholder="2 lb / 30 caps"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Precio (USD)</label><input type="number" id="pPrice" min="0" step="0.01" placeholder="45.00"></div>
+      <div class="field"><label>SKU</label><input type="text" id="pSku" placeholder="MS-001"></div>
+    </div>
+    <div class="field">
+      <label>URL de imagen</label>
+      <input type="text" id="pImage" placeholder="https://...">
+      <span class="hint">Pega el link de "Compartir" de Google Drive tal cual (o cualquier link directo a la imagen) — la app lo ajusta sola. En Drive, el archivo debe estar como "Cualquier persona con el enlace puede ver".</span>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Disponibilidad</label>
+        <select id="pStock">
+          <option value="stock">En stock</option>
+          <option value="pedido">Bajo pedido</option>
+        </select>
+      </div>
+      <div class="field" id="leadTimeField"><label>Días de entrega</label><input type="number" id="pLeadTime" min="0" placeholder="5"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="btnDeleteProduct" style="margin-right:auto;color:var(--danger);display:none;">Eliminar</button>
+      <button class="btn" id="btnCancelModal">Cancelar</button>
+      <button class="btn btn-primary" id="btnSaveProduct">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#EFE8D8"/><text x="50%" y="50%" font-family="Inter" font-size="14" fill="#B08D57" text-anchor="middle" dy=".3em">Mr Supply</text></svg>`);
+
+let products = [];
+let quotes = [];
+let settings = { counter: 1 };
+
+let currentQuote = null;
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDCC6KTJdUL0xnFoe2bwEOIaVVObAiJv8c",
+  authDomain: "mrsupplycotizador.firebaseapp.com",
+  projectId: "mrsupplycotizador",
+  storageBucket: "mrsupplycotizador.firebasestorage.app",
+  messagingSenderId: "387561246948",
+  appId: "1:387561246948:web:2153872334527221819cf1"
+};
+
+let db = null;
+let STORAGE_MODE = 'local';
+try{
+  if(typeof firebase !== 'undefined'){
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    STORAGE_MODE = 'firebase';
+  }
+}catch(e){ console.error('Firebase init failed', e); STORAGE_MODE = 'local'; }
+
+async function storageGet(key){
+  if(STORAGE_MODE === 'firebase'){
+    try{
+      const snap = await db.collection('mrsupply').doc(key).get();
+      return snap.exists ? snap.data().value : null;
+    }catch(e){ console.error('firebase get failed, falling back to local', e); }
+  }
+  try{ return localStorage.getItem('mrsupply_'+key); }catch(e){ return null; }
+}
+async function storageSet(key, value){
+  if(STORAGE_MODE === 'firebase'){
+    try{ await db.collection('mrsupply').doc(key).set({ value }); return true; }
+    catch(e){ console.error('firebase save failed, falling back to local', e); }
+  }
+  try{ localStorage.setItem('mrsupply_'+key, value); return true; }catch(e){ return false; }
+}
+
+function normalizeImageUrl(url){
+  if(!url) return url;
+  url = url.trim();
+  let m = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+  if(m) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
+  m = url.match(/drive\.google\.com\/open\?id=([^&]+)/);
+  if(m) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
+  m = url.match(/[?&]id=([^&]+)/);
+  if(m && url.includes('drive.google.com')) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
+  return url;
+}
+function uid(){ return 'p_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+function fmtMoney(n){ return '$' + (Number(n)||0).toFixed(2); }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function addDays(dateStr, days){ const d = new Date(dateStr); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+function fmtDate(iso){ if(!iso) return ''; const d = new Date(iso+'T00:00:00'); return d.toLocaleDateString('es-EC',{day:'2-digit',month:'short',year:'numeric'}); }
+
+async function loadAll(){
+  const p = await storageGet('products'); products = p ? JSON.parse(p) : [];
+  const q = await storageGet('quotes'); quotes = q ? JSON.parse(q) : [];
+  const s = await storageGet('settings'); settings = s ? JSON.parse(s) : { counter: 1 };
+}
+async function saveProducts(){ await storageSet('products', JSON.stringify(products)); }
+async function saveQuotes(){ await storageSet('quotes', JSON.stringify(quotes)); }
+async function saveSettings(){ await storageSet('settings', JSON.stringify(settings)); }
+
+
+/* ---------- Tabs ---------- */
+document.getElementById('tabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.tab-btn');
+  if(!btn) return;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const tab = btn.dataset.tab;
+  document.querySelectorAll('main').forEach(m=>m.classList.remove('active'));
+  document.getElementById('view-'+tab).classList.add('active');
+  if(tab==='quote'){ renderPicker(); renderDoc(); }
+  if(tab==='history'){ renderHistory(); }
+});
+
+/* ---------- Catalog rendering ---------- */
+function getCategories(){
+  return [...new Set(products.map(p=>p.category).filter(Boolean))].sort();
+}
+function refreshCategoryFilter(){
+  const sel = document.getElementById('catFilterCat');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Todas las categorías</option>' + getCategories().map(c=>`<option value="${c}">${c}</option>`).join('');
+  sel.value = current;
+}
+function filteredProducts(){
+  const q = document.getElementById('catSearch').value.trim().toLowerCase();
+  const cat = document.getElementById('catFilterCat').value;
+  const stock = document.getElementById('catFilterStock').value;
+  return products.filter(p=>{
+    if(q && !(p.name.toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q))) return false;
+    if(cat && p.category !== cat) return false;
+    if(stock && p.stock !== stock) return false;
+    return true;
+  });
+}
+function renderCatalog(){
+  refreshCategoryFilter();
+  const grid = document.getElementById('catalogGrid');
+  const list = filteredProducts();
+  if(products.length===0){
+    grid.innerHTML='';
+    document.getElementById('catHint').style.display='block';
+    document.getElementById('catHint').innerHTML = 'Aún no tienes productos. Agrega uno con "+ Producto" o importa tu catálogo desde Excel (columnas: Nombre, Categoria, Precio, Imagen, Stock, DiasEntrega, SKU, Presentacion).';
+    return;
+  }
+  document.getElementById('catHint').style.display='none';
+  if(list.length===0){
+    grid.innerHTML = '<div class="empty"><h3>Sin resultados</h3><p>Prueba con otra búsqueda o filtro.</p></div>';
+    return;
+  }
+  grid.innerHTML = list.map(p=>`
+    <div class="pcard">
+      <img class="pcard-img" src="${p.image || PLACEHOLDER_IMG}" onerror="this.src='${PLACEHOLDER_IMG}'">
+      <div class="pcard-body">
+        <div class="pcard-cat">${p.category || 'General'}</div>
+        <div class="pcard-name">${p.name}</div>
+        <div class="pcard-unit">${p.unit || ''}</div>
+        <div class="pcard-foot">
+          <span class="price">${fmtMoney(p.price)}</span>
+          ${p.stock==='stock' ? '<span class="badge badge-stock">En stock</span>' : `<span class="badge badge-order">Pedido · ${p.leadTime||0}d</span>`}
+        </div>
+      </div>
+      <div class="pcard-actions">
+        <button class="btn btn-sm" style="flex:1;" onclick="openProductModal('${p.id}')">Editar</button>
+      </div>
+    </div>
+  `).join('');
+}
+['catSearch','catFilterCat','catFilterStock'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderCatalog);
+  document.getElementById(id).addEventListener('change', renderCatalog);
+});
+
+/* ---------- Product modal ---------- */
+document.getElementById('pStock').addEventListener('change', (e)=>{
+  document.getElementById('leadTimeField').style.display = e.target.value==='pedido' ? 'flex' : 'none';
+});
+function openProductModal(id){
+  const p = id ? products.find(x=>x.id===id) : null;
+  document.getElementById('modalTitle').textContent = p ? 'Editar producto' : 'Nuevo producto';
+  document.getElementById('pId').value = p ? p.id : '';
+  document.getElementById('pName').value = p ? p.name : '';
+  document.getElementById('pCategory').value = p ? p.category||'' : '';
+  document.getElementById('pUnit').value = p ? p.unit||'' : '';
+  document.getElementById('pPrice').value = p ? p.price : '';
+  document.getElementById('pSku').value = p ? p.sku||'' : '';
+  document.getElementById('pImage').value = p ? p.image||'' : '';
+  document.getElementById('pStock').value = p ? p.stock : 'stock';
+  document.getElementById('pLeadTime').value = p ? p.leadTime||'' : '';
+  document.getElementById('leadTimeField').style.display = (p && p.stock==='pedido') ? 'flex' : 'none';
+  document.getElementById('btnDeleteProduct').style.display = p ? 'inline-flex' : 'none';
+  document.getElementById('productOverlay').style.display = 'flex';
+}
+document.getElementById('btnAddProduct').addEventListener('click', ()=>openProductModal(null));
+document.getElementById('btnCancelModal').addEventListener('click', ()=>{ document.getElementById('productOverlay').style.display='none'; });
+document.getElementById('productOverlay').addEventListener('click', (e)=>{ if(e.target.id==='productOverlay') document.getElementById('productOverlay').style.display='none'; });
+
+document.getElementById('btnSaveProduct').addEventListener('click', async ()=>{
+  const id = document.getElementById('pId').value;
+  const name = document.getElementById('pName').value.trim();
+  if(!name){ alert('El producto necesita un nombre.'); return; }
+  const data = {
+    id: id || uid(),
+    name,
+    category: document.getElementById('pCategory').value.trim(),
+    unit: document.getElementById('pUnit').value.trim(),
+    price: parseFloat(document.getElementById('pPrice').value) || 0,
+    sku: document.getElementById('pSku').value.trim(),
+    image: normalizeImageUrl(document.getElementById('pImage').value.trim()),
+    stock: document.getElementById('pStock').value,
+    leadTime: parseInt(document.getElementById('pLeadTime').value) || 0,
+  };
+  if(id){
+    const idx = products.findIndex(x=>x.id===id);
+    products[idx] = data;
+  } else {
+    products.push(data);
+  }
+  await saveProducts();
+  document.getElementById('productOverlay').style.display='none';
+  renderCatalog();
+});
+document.getElementById('btnDeleteProduct').addEventListener('click', async ()=>{
+  const id = document.getElementById('pId').value;
+  if(!id) return;
+  if(!confirm('¿Eliminar este producto del catálogo?')) return;
+  products = products.filter(x=>x.id!==id);
+  await saveProducts();
+  document.getElementById('productOverlay').style.display='none';
+  renderCatalog();
+});
+
+/* ---------- Excel import / export ---------- */
+document.getElementById('importFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (evt)=>{
+    try{
+      const wb = XLSX.read(evt.target.result, {type:'binary'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      let added = 0;
+      rows.forEach(row=>{
+        const norm = {};
+        Object.keys(row).forEach(k=> norm[k.trim().toLowerCase()] = row[k]);
+        const name = (norm['nombre']||norm['name']||'').toString().trim();
+        if(!name) return;
+        const stockRaw = (norm['stock']||norm['disponibilidad']||'').toString().trim().toLowerCase();
+        const stock = ['pedido','bajo pedido','no','false','0'].includes(stockRaw) ? 'pedido' : 'stock';
+        products.push({
+          id: uid(),
+          name,
+          category: (norm['categoria']||norm['categoría']||norm['category']||'').toString().trim(),
+          unit: (norm['presentacion']||norm['presentación']||norm['unit']||'').toString().trim(),
+          price: parseFloat(norm['precio']||norm['price']||0) || 0,
+          sku: (norm['sku']||'').toString().trim(),
+          image: normalizeImageUrl((norm['imagen']||norm['image']||'').toString().trim()),
+          stock,
+          leadTime: parseInt(norm['diasentrega']||norm['días entrega']||norm['leadtime']||0) || 0,
+        });
+        added++;
+      });
+      await saveProducts();
+      renderCatalog();
+      alert(`Se importaron ${added} productos.`);
+    }catch(err){
+      alert('No se pudo leer el archivo. Verifica que sea un Excel/CSV válido.');
+      console.error(err);
+    }
+    e.target.value = '';
+  };
+  reader.readAsBinaryString(file);
+});
+
+document.getElementById('btnExportExcel').addEventListener('click', ()=>{
+  const rows = products.map(p=>({
+    Nombre: p.name, Categoria: p.category, Presentacion: p.unit, Precio: p.price,
+    SKU: p.sku, Imagen: p.image, Stock: p.stock==='stock'?'stock':'pedido', DiasEntrega: p.leadTime||0
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Catalogo');
+  XLSX.writeFile(wb, 'mr-supply-catalogo.xlsx');
+});
+
+/* ---------- Quote builder ---------- */
+function newQuoteObj(){
+  return {
+    client: { name:'', phone:'', city:'' },
+    items: [],
+    discountPercent: 0,
+    notes: '',
+    date: todayISO(),
+    validUntil: addDays(todayISO(), 7),
+  };
+}
+currentQuote = newQuoteObj();
+
+function renderPicker(){
+  const q = (document.getElementById('pickerSearch').value||'').trim().toLowerCase();
+  const list = products.filter(p=> !q || p.name.toLowerCase().includes(q));
+  const el = document.getElementById('pickerList');
+  if(products.length===0){
+    el.innerHTML = '<div class="hint">Agrega productos en la pestaña Catálogo primero.</div>';
+    return;
+  }
+  el.innerHTML = list.map(p=>`
+    <div class="picker-row">
+      <img src="${p.image||PLACEHOLDER_IMG}" onerror="this.src='${PLACEHOLDER_IMG}'">
+      <div style="flex:1;">
+        <div class="pr-name">${p.name}</div>
+        <div class="pr-price">${fmtMoney(p.price)} · ${p.stock==='stock'?'En stock':'Pedido '+(p.leadTime||0)+'d'}</div>
+      </div>
+      <button class="btn btn-sm" onclick="addToQuote('${p.id}')">+</button>
+    </div>
+  `).join('');
+}
+document.getElementById('pickerSearch').addEventListener('input', renderPicker);
+
+function addToQuote(productId){
+  const p = products.find(x=>x.id===productId);
+  if(!p) return;
+  const existing = currentQuote.items.find(it=>it.productId===productId);
+  if(existing){ existing.qty += 1; }
+  else{
+    currentQuote.items.push({
+      productId: p.id, name:p.name, image:p.image, unit:p.unit,
+      price:p.price, stock:p.stock, leadTime:p.leadTime, qty:1
+    });
+  }
+  renderDoc();
+}
+function updateQty(idx, delta){
+  const it = currentQuote.items[idx];
+  it.qty = Math.max(1, it.qty + delta);
+  renderDoc();
+}
+function removeItem(idx){
+  currentQuote.items.splice(idx,1);
+  renderDoc();
+}
+
+function computeTotals(){
+  const subtotal = currentQuote.items.reduce((s,it)=> s + it.price*it.qty, 0);
+  const discount = subtotal * ((parseFloat(currentQuote.discountPercent)||0)/100);
+  const total = subtotal - discount;
+  return {subtotal, discount, total};
+}
+
+function renderDoc(){
+  document.getElementById('docNumber').textContent = 'MS-' + String(settings.counter).padStart(4,'0');
+  document.getElementById('docDate').textContent = fmtDate(currentQuote.date);
+  document.getElementById('docValid').textContent = fmtDate(currentQuote.validUntil);
+  document.getElementById('docClientName').textContent = currentQuote.client.name || 'Cliente sin nombre';
+  document.getElementById('docClientMeta').textContent = [currentQuote.client.phone, currentQuote.client.city].filter(Boolean).join(' · ');
+
+  const tbody = document.getElementById('docItems');
+  if(currentQuote.items.length===0){
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--graphite);padding:22px 0;">Agrega productos desde el panel izquierdo.</td></tr>`;
+  } else {
+    tbody.innerHTML = currentQuote.items.map((it,idx)=>`
+      <tr>
+        <td>
+          <div class="item-name-cell">
+            <img src="${it.image||PLACEHOLDER_IMG}" onerror="this.src='${PLACEHOLDER_IMG}'">
+            <div>
+              <div>${it.name}</div>
+              <div class="it-meta">${it.unit||''} · ${it.stock==='stock' ? '<span style="color:var(--sage);">En stock</span>' : `<span style="color:var(--clay);">Pedido · ${it.leadTime||0}d</span>`}</div>
+            </div>
+          </div>
+        </td>
+        <td class="num">
+          <div class="qty-stepper no-print">
+            <button onclick="updateQty(${idx},-1)">–</button><span>${it.qty}</span><button onclick="updateQty(${idx},1)">+</button>
+          </div>
+          <span style="display:none;" class="print-only">${it.qty}</span>
+        </td>
+        <td class="num">${fmtMoney(it.price)}</td>
+        <td class="num">${fmtMoney(it.price*it.qty)}</td>
+        <td class="no-print"><button class="btn-ghost btn-sm" onclick="removeItem(${idx})">✕</button></td>
+      </tr>
+    `).join('');
+  }
+
+  const t = computeTotals();
+  document.getElementById('tSubtotal').textContent = fmtMoney(t.subtotal);
+  document.getElementById('tDiscount').textContent = '-' + fmtMoney(t.discount);
+  document.getElementById('tTotal').textContent = fmtMoney(t.total);
+}
+
+document.getElementById('qClientName').addEventListener('input', e=>{ currentQuote.client.name = e.target.value; renderDoc(); });
+document.getElementById('qClientPhone').addEventListener('input', e=>{ currentQuote.client.phone = e.target.value; renderDoc(); });
+document.getElementById('qClientCity').addEventListener('input', e=>{ currentQuote.client.city = e.target.value; renderDoc(); });
+document.getElementById('qDiscount').addEventListener('input', e=>{ currentQuote.discountPercent = e.target.value; renderDoc(); });
+document.getElementById('qNotes').addEventListener('input', e=>{ currentQuote.notes = e.target.value; });
+
+document.getElementById('btnNewQuote').addEventListener('click', ()=>{
+  if(currentQuote.items.length && !confirm('¿Descartar la cotización actual sin guardar?')) return;
+  currentQuote = newQuoteObj();
+  document.getElementById('qClientName').value='';
+  document.getElementById('qClientPhone').value='';
+  document.getElementById('qClientCity').value='';
+  document.getElementById('qDiscount').value=0;
+  document.getElementById('qNotes').value='';
+  renderDoc();
+});
+
+document.getElementById('btnSaveQuote').addEventListener('click', async ()=>{
+  if(currentQuote.items.length===0){ alert('Agrega al menos un producto antes de guardar.'); return; }
+  const t = computeTotals();
+  const record = {
+    id: uid(),
+    number: 'MS-' + String(settings.counter).padStart(4,'0'),
+    date: currentQuote.date,
+    validUntil: currentQuote.validUntil,
+    client: {...currentQuote.client},
+    items: JSON.parse(JSON.stringify(currentQuote.items)),
+    discountPercent: currentQuote.discountPercent,
+    notes: currentQuote.notes,
+    subtotal: t.subtotal, discount: t.discount, total: t.total,
+    createdAt: new Date().toISOString(),
+  };
+  quotes.unshift(record);
+  settings.counter += 1;
+  await saveQuotes();
+  await saveSettings();
+  renderDoc();
+  alert('Cotización ' + record.number + ' guardada en el historial.');
+});
+
+document.getElementById('btnPrintQuote').addEventListener('click', ()=>{ window.print(); });
+
+/* ---------- History ---------- */
+function renderHistory(){
+  const q = (document.getElementById('histSearch').value||'').trim().toLowerCase();
+  const el = document.getElementById('historyList');
+  const list = quotes.filter(r => !q || r.number.toLowerCase().includes(q) || (r.client.name||'').toLowerCase().includes(q));
+  if(quotes.length===0){
+    el.innerHTML = '<div class="empty"><h3>Sin cotizaciones aún</h3><p>Las cotizaciones que guardes aparecerán aquí.</p></div>';
+    return;
+  }
+  if(list.length===0){ el.innerHTML = '<div class="empty"><h3>Sin resultados</h3></div>'; return; }
+  el.innerHTML = list.map(r=>`
+    <div class="hist-row">
+      <span class="hnum">${r.number}</span>
+      <span class="hclient">${r.client.name || 'Sin nombre'}</span>
+      <span class="hdate">${fmtDate(r.date)}</span>
+      <span class="htotal">${fmtMoney(r.total)}</span>
+      <button class="btn btn-sm" onclick="loadQuoteToBuilder('${r.id}')">Ver / Reimprimir</button>
+    </div>
+  `).join('');
+}
+document.getElementById('histSearch').addEventListener('input', renderHistory);
+
+function loadQuoteToBuilder(id){
+  const r = quotes.find(x=>x.id===id);
+  if(!r) return;
+  currentQuote = {
+    client: {...r.client}, items: JSON.parse(JSON.stringify(r.items)),
+    discountPercent: r.discountPercent, notes: r.notes, date: r.date, validUntil: r.validUntil,
+  };
+  document.getElementById('qClientName').value = r.client.name||'';
+  document.getElementById('qClientPhone').value = r.client.phone||'';
+  document.getElementById('qClientCity').value = r.client.city||'';
+  document.getElementById('qDiscount').value = r.discountPercent||0;
+  document.getElementById('qNotes').value = r.notes||'';
+  document.querySelector('.tab-btn[data-tab="quote"]').click();
+  renderDoc();
+}
+
+/* ---------- Backup / restore ---------- */
+document.getElementById('btnBackupExport').addEventListener('click', ()=>{
+  const backup = { products, quotes, settings, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'mr-supply-respaldo-' + todayISO() + '.json';
+  a.click();
+});
+document.getElementById('backupFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (evt)=>{
+    try{
+      const data = JSON.parse(evt.target.result);
+      if(!confirm('Esto reemplazará el catálogo y las cotizaciones actuales por los del respaldo. ¿Continuar?')) return;
+      products = data.products || [];
+      quotes = data.quotes || [];
+      settings = data.settings || { counter: 1 };
+      await saveProducts(); await saveQuotes(); await saveSettings();
+      renderCatalog(); renderDoc(); renderHistory();
+      alert('Respaldo restaurado correctamente.');
+    }catch(err){ alert('El archivo de respaldo no es válido.'); }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+function renderStorageBadge(){
+  const el = document.getElementById('storageBadge');
+  if(STORAGE_MODE === 'firebase'){
+    el.textContent = 'Guardado: compartido (Firebase)';
+    el.className = 'badge badge-stock';
+  } else {
+    el.textContent = 'Guardado: solo este navegador';
+    el.className = 'badge badge-order';
+    el.title = 'No se pudo conectar a Firebase — los datos se están guardando solo en este navegador. Usa "Respaldo" para no perder tu catálogo.';
+  }
+}
+
+/* ---------- Init ---------- */
+(async function init(){
+  await loadAll();
+  renderStorageBadge();
+  renderCatalog();
+  renderDoc();
+})();
+</script>
+</body>
+</html>
